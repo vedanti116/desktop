@@ -23,6 +23,7 @@ import { hasWritePermission } from '../../models/github-repository'
 import { RetryActionType } from '../../models/retry-actions'
 import { parseFilesToBeOverwritten } from '../lib/parse-files-to-be-overwritten'
 import { pathExists } from '../lib/path-exists'
+import { ISecretLocation } from '../secret-scanning/push-protection-error'
 
 /** An error which also has a code property. */
 interface IErrorWithCode extends Error {
@@ -604,26 +605,43 @@ export async function discardChangesHandler(
   return null
 }
 
-function extractSecretScanningPushProtectionErrorMessage(stderr: string): {
-  tokenDescription: string
-  commitSha: string
-  path: string
-  lineNumber: number
-  bypassURL: string
-} | null {
-  const regex =
-    /error[.\s\S]+GITHUB PUSH PROTECTION[.\s\S]+\(?\) [.\s\S]+—— ([.\S\s]+?) —[.\s\S]+—[.\s\S]+commit: (\b[0-9a-f]{5,40}\b) [.\s\S]+path: (\b.+?\b):([0-9]+?)[.\s\S]+\(?\) To push, remove secret from commit\(s\) or follow this URL to allow the secret[.\s\S]+?(https:\/\/github.com\/[.\S]+?unblock-secret\/[\S]+?\b) /g
-  const match = regex.exec(stderr)
-  if (match) {
-    return {
-      tokenDescription: match[1],
-      commitSha: match[2],
-      path: match[3],
-      lineNumber: parseInt(match[4]),
-      bypassURL: match[5],
-    }
+function extractSecretScanningLocations(
+  stderr: string
+): ReadonlyArray<ISecretLocation> | null {
+  const secretsRegex =
+    /      —— ([\s\S]+locations:[\s\S]+To push, remove secret from commit\(s\) or follow this URL to allow the secret[\s\S]+unblock-secret[\s\S]+)      —— /g
+  const secrets = secretsRegex.exec(stderr)
+  if (!secrets) {
+    return null
   }
-  return null
+
+  const commitsPathsNumbersRegex = /commit: ([\S]+)[\s]+path: ([\S]+)\b[\s\S]/g
+  const byPassURLRegex = /(https:[\S]+unblock-secret[\S]+)\b/g
+
+  const secretLocations: Array<ISecretLocation> = []
+
+  ;[...secrets.values()].map(secret => {
+    const slines = secret.split('\n')
+    const tokenDescription = slines[0].replaceAll('—', '').trim()
+    const commitsPathsNumbers = commitsPathsNumbersRegex.exec(secret)
+    const bypassURL = byPassURLRegex.exec(secret)
+    if (!commitsPathsNumbers || !bypassURL) {
+      return
+    }
+
+    ;[...commitsPathsNumbers?.values()].map(commitPathNumber => {
+      console.log(commitPathNumber)
+      secretLocations.push({
+        tokenDescription,
+        commitSha: commitPathNumber[1],
+        path: commitPathNumber[2],
+        lineNumber: parseInt(commitPathNumber[3], 10),
+        bypassURL: bypassURL[1],
+      })
+    })
+  })
+
+  return secretLocations
 }
 
 /**
@@ -640,7 +658,10 @@ export async function secretScanningPushProtectionErrorHandler(
   }
 
   const gitError = asGitError(e.underlyingError)
-  if (!gitError?.args.includes('push')) {
+  if (
+    !gitError?.args.includes('push') ||
+    !gitError?.message.includes('GITHUB PUSH PROTECTION')
+  ) {
     return error
   }
 
@@ -655,15 +676,15 @@ export async function secretScanningPushProtectionErrorHandler(
   }
 
   const remoteMessage = getRemoteMessage(coerceToString(gitError.result.stderr))
-  const match = extractSecretScanningPushProtectionErrorMessage(remoteMessage)
+  const secretLocations = extractSecretScanningLocations(remoteMessage)
 
-  if (!match) {
+  if (!secretLocations) {
     return error
   }
 
   dispatcher.showPopup({
     type: PopupType.PushProtectionError,
-    ...match,
+    secretLocations,
   })
 
   return null

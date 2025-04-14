@@ -23,6 +23,7 @@ import { GitHubRepository } from './github-repository'
 import { ValidNotificationPullRequestReview } from '../lib/valid-notification-pull-request-review'
 import { UnreachableCommitsTab } from '../ui/history/unreachable-commits-dialog'
 import { IAPIComment } from '../lib/api'
+import { ISecretLocation } from '../ui/secret-scanning/push-protection-error'
 
 export enum PopupType {
   RenameBranch = 'RenameBranch',
@@ -436,11 +437,7 @@ export type PopupDetail =
     }
   | {
       type: PopupType.PushProtectionError
-      tokenDescription: string
-      bypassURL: string
-      commitSha: string
-      path: string
-      lineNumber: number
+      secretLocations: ReadonlyArray<ISecretLocation>
     }
 
 export type Popup = IBasePopup & PopupDetail

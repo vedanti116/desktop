@@ -2499,11 +2499,7 @@ export class App extends React.Component<IAppProps, IAppState> {
         return (
           <PushProtectionErrorDialog
             key="push-protection-error"
-            tokenDescription={popup.tokenDescription}
-            bypassURL={popup.bypassURL}
-            commitSha={popup.commitSha}
-            path={popup.path}
-            lineNumber={popup.lineNumber}
+            secretLocations={popup.secretLocations}
             onDismissed={onPopupDismissedFn}
           />
         )

@@ -6,12 +6,16 @@ import { Octicon } from '../octicons'
 import * as octicons from '../octicons/octicons.generated'
 import { CopyButton } from '../copy-button'
 
+export interface ISecretLocation {
+  tokenDescription: string
+  commitSha: string
+  path: string
+  lineNumber: number
+  bypassURL: string
+}
+
 interface IPushProtectionErrorDialogProps {
-  readonly tokenDescription: string
-  readonly bypassURL: string
-  readonly commitSha: string
-  readonly path: string
-  readonly lineNumber: number
+  readonly secretLocations: ReadonlyArray<ISecretLocation>
 
   readonly onDismissed: () => void
 }
@@ -75,37 +79,12 @@ export class PushProtectionErrorDialog extends React.Component<
   }
 
   private renderLocations = () => {
-    const secretLocations = [
-      {
-        tokenDescription: this.props.tokenDescription,
-        bypassURL: this.props.bypassURL,
-        commitSha: this.props.commitSha,
-        path: this.props.path,
-        lineNumber: this.props.lineNumber,
-      },
-      {
-        tokenDescription: this.props.tokenDescription,
-        bypassURL: this.props.bypassURL,
-        commitSha: this.props.commitSha,
-        path: this.props.path,
-        lineNumber: this.props.lineNumber,
-      },
-      {
-        tokenDescription: this.props.tokenDescription,
-        bypassURL: this.props.bypassURL,
-        commitSha: this.props.commitSha,
-        path: this.props.path,
-        lineNumber: this.props.lineNumber,
-      },
-    ]
-    const rows = secretLocations.map((row, index) => (
+    const rows = this.props.secretLocations.map((row, index) => (
       <div key={index} className="location">
         <div className="location-header">
-          <span className="location-description">
-            {this.props.tokenDescription}
-          </span>
+          <span className="location-description">{row.tokenDescription}</span>
           <span>
-            <LinkButton uri={this.props.bypassURL}>Bypass </LinkButton>
+            <LinkButton uri={row.bypassURL}>Bypass </LinkButton>
           </span>
         </div>
         <div className="location-details">
@@ -122,7 +101,7 @@ export class PushProtectionErrorDialog extends React.Component<
           <div>
             <Octicon symbol={octicons.relFilePath} />
             <div className="ref selectable-text">
-              {this.props.path} at line {this.props.lineNumber}
+              {row.path} at line {row.lineNumber}
             </div>
           </div>
         </div>
